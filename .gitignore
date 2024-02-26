@@ -154,3 +154,5 @@ celery.env
 commands.txt
 
 ui_dist/
+database.db-shm
+database.db-wal
