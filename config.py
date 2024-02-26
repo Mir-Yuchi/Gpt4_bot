@@ -1,3 +1,8 @@
-token = ""
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+token = os.getenv("BOT_TOKEN")
 admins = [5594051596]
-openaiToken = "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"
+openaiToken = os.getenv("OPENAI_TOKEN")
