@@ -1,0 +1,4 @@
+peewee
+pytelegrambotapi
+schedule
+openai
