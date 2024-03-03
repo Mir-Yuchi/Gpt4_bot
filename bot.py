@@ -1,4 +1,5 @@
-import os
+﻿import os
+import random
 import time
 import requests
 from database import *
@@ -39,7 +40,12 @@ def ask_chat_thread(message):
         model=model,
         messages=history
     )
-    bot.edit_message_text(response.choices[0].message.content.strip(), msg.chat.id, msg.message_id, parse_mode="")
+    text = response.choices[0].message.content.strip()
+    if Ads.select():
+        ad = random.choice(Ads.select())
+        Ads.update(views=ad.views+1).where(Ads.name == ad.name).execute()
+        text += f"\n\n{ad.text}"
+    bot.edit_message_text(text, msg.chat.id, msg.message_id, parse_mode="")
 
 
 def generate_chat(message):
@@ -75,9 +81,13 @@ def generate_chat(message):
     response = requests.get(image_url)
     with open(f"{message.message_id}.jpg", "wb") as f:
         f.write(response.content)
+    text = "Вот ваша фотография!"
+    if Ads.select():
+        ad = random.choice(Ads.select())
+        Ads.update(views=ad.views + 1).where(Ads.name == ad.name).execute()
+        text += f"\n\n{ad.text}"
     with open(f"{message.message_id}.jpg", "rb") as f:
-        # bot.reply_to(message, "Вот ваша фотография!", photo=f)
-        bot.send_photo(message.chat.id, f, "Вот ваша фотография!", reply_to_message_id=message.message_id)
+        bot.send_photo(message.chat.id, f, text, reply_to_message_id=message.message_id)
     bot.delete_message(msg.chat.id, msg.message_id)
     os.remove(f"{message.message_id}.jpg")
 
@@ -171,7 +181,7 @@ def dialogue(message: types.Message):
 <b>Осталось запросов:</b> <code>{userInfo.qLeft + userInfo.qReferal}</code>
 <i>{userInfo.qLeft} ежедневных запросов, {userInfo.qReferal} бонусных</i>
 
-<b>Твоя реферальная ссылка:https://t.me/testDveizbot?start={message.chat.id}
+<b>Твоя реферальная ссылка:https://t.me/{bot.get_me().username}?start={message.chat.id}
 Количество активных рефералов:</b> {len(Users.select().where(Users.referal == message.chat.id))}
 
 <i>"Каждый приглашённый человек даёт 5 бонусных запросов"</i>''')
@@ -208,8 +218,48 @@ def dialogue(message: types.Message):
     elif message.text == "Изменить сообщение старт" and message.chat.id in admins:
         bot.send_message(message.chat.id, "Введите новое сообщение для старта (можно с фото)", reply_markup=cancel)
         bot.register_next_step_handler(message, changeStart)
+    elif message.text == "Реклама" and message.chat.id in admins:
+        ads = Ads.select()
+        kb = types.ReplyKeyboardMarkup(True)
+        text = "Все рекламы на данный момент:\n"
+        for ad in ads:
+            kb.add(ad.name)
+            text += f"\n{ad.name} - {ad.views} просмотров"
+        text += "\nДля удаления рекламы нажмите на её название ниже"
+        kb.add("Добавить рекламу").add("Отмена")
+        bot.send_message(message.chat.id, text, reply_markup=kb)
+        bot.register_next_step_handler(message, viewAds)
     else:
         bot.send_message(message.chat.id, "Я тебя не понимаю. Выбери функцию из меню ниже.", reply_markup=menuUser)
+
+
+def viewAds(message: types.Message):
+    if not message.text or message.text == "Отмена":
+        return admin(message)
+    if Ads.select().where(Ads.name == message.text):
+        Ads.select().where(Ads.name == message.text)[0].delete_instance()
+        bot.send_message(message.chat.id, "Реклама успешно удалена.", reply_markup=menuAdmin)
+    elif message.text == "Добавить рекламу":
+        bot.send_message(message.chat.id, "Введите название рекламы (для понимания в админке)", reply_markup=cancel)
+        bot.register_next_step_handler(message, addAd)
+    else:
+        admin(message)
+
+
+def addAd(message):
+    if not message.text or message.text == "Отмена":
+        return admin(message)
+    if Ads.select().where(Ads.name == message.text).exists():
+        return bot.send_message(message.chat.id, "Такая реклама уже существует.", reply_markup=menuAdmin)
+    bot.send_message(message.chat.id, "Введите текст, который будет показывать.", reply_markup=cancel)
+    bot.register_next_step_handler(message, addAdFinal, message.text)
+
+
+def addAdFinal(message: types.Message, name):
+    if not message.text or message.text == "Отмена":
+        return admin(message)
+    Ads.create(name=name, text=message.html_text)
+    bot.send_message(message.chat.id, "Реклама успешно создана.", reply_markup=menuAdmin)
 
 
 def selectSendAll(message):
@@ -382,7 +432,7 @@ def startSendAll2(message, msg, who):
     if message.text == "Пропустить":
         return threading.Thread(target=sendAll, args=(msg, "", "", who, )).start()
     bot.send_message(message.chat.id, "Введите ссылку и рассылка начнётся.", reply_markup=cancel)
-    bot.register_next_step_handler(message, startSendAllFinish, msg, message.text)
+    bot.register_next_step_handler(message, startSendAllFinish, msg, message.text, who)
 
 
 def startSendAllFinish(message, msg, name, who):
@@ -422,6 +472,10 @@ def createImageThread(message):
         f.write(response.content)
     with open(f"{message.message_id}.jpg", "rb") as f:
         bot.send_photo(message.chat.id, f, "Вот ваша фотография!", reply_markup=menuUser)
+    if Ads.select():
+        ad = random.choice(Ads.select())
+        Ads.update(views=ad.views + 1).where(Ads.name == ad.name).execute()
+        bot.send_message(message.chat.id, ad.text)
     bot.delete_message(msg.chat.id, msg.message_id)
     os.remove(f"{message.message_id}.jpg")
 
@@ -465,6 +519,10 @@ def talkGptThread(message):
     Messages.create(conversation=conversation, role=response.choices[0].message.role,
                     text=response.choices[0].message.content.strip())
     bot.edit_message_text(response.choices[0].message.content.strip(), msg.chat.id, msg.message_id, parse_mode="")
+    if Ads.select():
+        ad = random.choice(Ads.select())
+        Ads.update(views=ad.views + 1).where(Ads.name == ad.name).execute()
+        bot.send_message(message.chat.id, ad.text)
     bot.register_next_step_handler(message, talkGpt)
 
 

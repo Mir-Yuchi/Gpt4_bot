@@ -46,9 +46,20 @@ class Messages(Model):
         db_table = "Messages"
 
 
+class Ads(Model):
+    name = TextField(default="")
+    text = TextField(default="")
+    views = IntegerField(default=0)
+
+    class Meta:
+        database = db
+        db_table = "Ads"
+
+
 def connect():
     db.connect()
     Users.create_table()
     Conversations.create_table()
     Messages.create_table()
     Chats.create_table()
+    Ads.create_table()
