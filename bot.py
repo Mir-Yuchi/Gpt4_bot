@@ -113,7 +113,7 @@ def menuAdmin(user_id):
 
 @bot.message_handler(commands=['admin'])
 def admin(message: types.Message):
-    userInfo = Users.select().where(Users.user == message.chat.id)[0]
+    userInfo = Users.select().where(Users.user_id == message.chat.id)[0]
     if not userInfo.status:
         return start(message)
     bot.send_message(message.chat.id, "Открываю админку", reply_markup=menuAdmin(message.chat.id))
@@ -328,11 +328,11 @@ def addChannel(message):
 def addChannelFinish(message, channel_id):
     if not message.text or message.text == "Отмена":
         return admin(message)
-    Channels.create(channel_id=channel_id, link=link)
+    Channels.create(channel_id=channel_id, link=message.text)
     bot.send_message(message.chat.id, "Канал успешно добавлен.", reply_markup=menuAdmin(message.chat.id))
 
 
-def addManager(message: types.Message): # Добавить менеджера
+def addManager(message: types.Message):
     if not message.text or not message.text.isdigit():
         return admin(message)
     if not Users.select().where(Users.user_id == int(message.text)).exists():
@@ -350,7 +350,7 @@ def viewAds(message: types.Message):
         return admin(message)
     if Ads.select().where(Ads.name == message.text):
         Ads.select().where(Ads.name == message.text).delete_instance()
-        bot.send_message(message.chat.id, "Реклама успешно удалена.", reply_markup=menuAdmin)
+        bot.send_message(message.chat.id, "Реклама успешно удалена.", reply_markup=menuAdmin(message.chat.id))
     elif message.text == "Добавить рекламу":
         bot.send_message(message.chat.id, "Введите название рекламы (для понимания в админке)", reply_markup=cancel)
         bot.register_next_step_handler(message, addAd)
@@ -362,7 +362,7 @@ def addAd(message):
     if not message.text or message.text == "Отмена":
         return admin(message)
     if Ads.select().where(Ads.name == message.text).exists():
-        return bot.send_message(message.chat.id, "Такая реклама уже существует.", reply_markup=menuAdmin)
+        return bot.send_message(message.chat.id, "Такая реклама уже существует.", reply_markup=menuAdmin(message.chat.id))
     bot.send_message(message.chat.id, "Введите текст, который будет показывать.", reply_markup=cancel)
     bot.register_next_step_handler(message, addAdFinal, message.text)
 
@@ -371,7 +371,7 @@ def addAdFinal(message: types.Message, name):
     if not message.text or message.text == "Отмена":
         return admin(message)
     Ads.create(name=name, text=message.html_text)
-    bot.send_message(message.chat.id, "Реклама успешно создана.", reply_markup=menuAdmin)
+    bot.send_message(message.chat.id, "Реклама успешно создана.", reply_markup=menuAdmin(message.chat.id))
 
 
 def selectSendAll(message):
@@ -400,7 +400,7 @@ def changeStart(message: types.Message):
         text = message.html_text
     with open("mainText.txt", "w", encoding="utf-8") as file:
         file.write(f"{photo}\n{text}")
-    bot.send_message(message.chat.id, "Текст успешно изменён.", reply_markup=menuAdmin)
+    bot.send_message(message.chat.id, "Текст успешно изменён.", reply_markup=menuAdmin(message.chat.id))
 
 
 def searchUser(message: types.Message):
@@ -412,7 +412,7 @@ def searchUser(message: types.Message):
         username = message.text.replace("@", "")
         users = Users.select().where(Users.username == username)
     if not users.exists():
-        return bot.send_message(message.chat.id, "К сожалению, не могу найти такого пользователя.", reply_markup=menuAdmin)
+        return bot.send_message(message.chat.id, "К сожалению, не могу найти такого пользователя.", reply_markup=menuAdmin(message.chat.id))
     userInfo = users[0]
     text = f"""Профиль @{userInfo.username}
 
@@ -436,10 +436,10 @@ def doUser(message, userInfo):
         return admin(message)
     if message.text == "Заблокировать":
         Users.update(blocked=True).where(Users.id == userInfo.id).execute()
-        return bot.send_message(message.chat.id, "Пользователь заблокирован.", reply_markup=menuAdmin)
+        return bot.send_message(message.chat.id, "Пользователь заблокирован.", reply_markup=menuAdmin(message.chat.id))
     elif message.text == "Разблокировать":
         Users.update(blocked=False).where(Users.id == userInfo.id).execute()
-        return bot.send_message(message.chat.id, "Пользователь разблокирован.", reply_markup=menuAdmin)
+        return bot.send_message(message.chat.id, "Пользователь разблокирован.", reply_markup=menuAdmin(message.chat.id))
     if message.text == "Изменить кол-во запросов":
         bot.send_message(message.chat.id, "Введите новое кол-во запросов (изменятся только дневные)", reply_markup=cancel)
         bot.register_next_step_handler(message, changeQLeft, userInfo)
@@ -451,7 +451,7 @@ def changeQLeft(message, userInfo):
     if not message.text or not message.text.isdigit():
         return admin(message)
     Users.update(qLeft=int(message.text)).where(Users.id == userInfo.id).execute()
-    bot.send_message(message.chat.id, "Кол-во запросов успешно изменено.", reply_markup=menuAdmin)
+    bot.send_message(message.chat.id, "Кол-во запросов успешно изменено.", reply_markup=menuAdmin(message.chat.id))
 
 
 def sendAll(message, name, url, who="users"):
@@ -462,7 +462,7 @@ def sendAll(message, name, url, who="users"):
         )
     else:
         kb = None
-    bot.send_message(message.chat.id, "Рассылка началась.", reply_markup=menuAdmin)
+    bot.send_message(message.chat.id, "Рассылка началась.", reply_markup=menuAdmin(message.chat.id))
     count = [0, 0]
     if message.content_type == "text":
         if who == "users":
