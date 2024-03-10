@@ -11,7 +11,7 @@ class Users(Model):
     qLeft = IntegerField(default=10)
     qReferal = IntegerField(default=0)
     blocked = BooleanField(default=False)
-
+    status = TextField(default="")
 
     class Meta:
         database = db
@@ -56,6 +56,15 @@ class Ads(Model):
         db_table = "Ads"
 
 
+class Channels(Model):
+    channel_id = BigIntegerField(default=0)
+    link = TextField(default="")
+
+    class Meta:
+        database = db
+        db_table = "Channels"
+
+
 def connect():
     db.connect()
     Users.create_table()
@@ -63,3 +72,4 @@ def connect():
     Messages.create_table()
     Chats.create_table()
     Ads.create_table()
+    Channels.create_table()

@@ -1,8 +1,5 @@
 from telebot import types
 
-menuAdmin = types.ReplyKeyboardMarkup(True)
-menuAdmin.add("Рассылка").add("Пользователи").add("Статистика").add("Изменить сообщение старт").add("Реклама")
-
 menuUser = types.ReplyKeyboardMarkup(True)
 menuUser.add("🚀 Задать вопрос").add("🖍 Создать картинку").add("🥷 Профиль").add("📝 Помощь", "🎯 Администрация")
 

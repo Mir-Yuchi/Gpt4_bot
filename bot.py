@@ -16,6 +16,16 @@ openai.api_key = openaiToken
 model = "gpt-4-1106-preview"
 
 
+def checkSub(channel_id, user_id):
+    try:
+        x = bot.get_chat_member(channel_id, user_id)
+        if x.status in ["member", "administrator", "creator"]:
+            return True
+        return False
+    except:
+        return False
+
+
 def ask_chat_thread(message):
     if message.chat.id > 0:
         return bot.send_message(message.chat.id, "Эта команда используется только в чатах!")
@@ -92,9 +102,21 @@ def generate_chat(message):
     os.remove(f"{message.message_id}.jpg")
 
 
+def menuAdmin(user_id):
+    userInfo = Users.select().where(Users.user == user_id)[0]
+    menuAdmin = types.ReplyKeyboardMarkup(True)
+    menuAdmin.add("Рассылка").add("Пользователи").add("Статистика").add("Изменить сообщение старт").add("Реклама").add("Каналы")
+    if userInfo.status == "owner":
+        menuAdmin.add("Добавить менеджера").add("Передать права")
+    return menuAdmin
+
+
 @bot.message_handler(commands=['admin'])
 def admin(message: types.Message):
-    bot.send_message(message.chat.id, "Открываю админку", reply_markup=menuAdmin)
+    userInfo = Users.select().where(Users.user == message.chat.id)[0]
+    if not userInfo.status:
+        return start(message)
+    bot.send_message(message.chat.id, "Открываю админку", reply_markup=menuAdmin(message.chat.id))
 
 
 @bot.message_handler(commands=['ask'])
@@ -143,6 +165,18 @@ def start(message: types.Message):
     userInfo = Users.select().where(Users.user_id == message.chat.id)[0]
     if userInfo.blocked:
         return bot.send_message(message.chat.id, "Вы заблокированы!")
+    channels = Channels.select()
+    flag = True
+    for channel in channels:
+        if not checkSub(channel.channel_id, message.chat.id):
+            flag = False
+    if not flag:
+        kb = types.InlineKeyboardMarkup()
+        for channel in channels:
+            kb.add(
+                types.InlineKeyboardButton(text="Подписаться", url=channel.link)
+            )
+        return bot.send_message(message.chat.id, "Подпишитесь на все каналы ниже, затем заново напишите /start.", reply_markup=kb)
     with open("mainText.txt", "r", encoding="utf-8") as file:
         photo, text = file.read().split("\n", 1)
     addChat = types.InlineKeyboardMarkup()
@@ -168,6 +202,19 @@ def dialogue(message: types.Message):
     userInfo = Users.select().where(Users.user_id == message.chat.id)[0]
     if userInfo.blocked:
         return bot.send_message(message.chat.id, "Вы заблокированы!")
+    channels = Channels.select()
+    flag = True
+    for channel in channels:
+        if not checkSub(channel.channel_id, message.chat.id):
+            flag = False
+    if not flag:
+        kb = types.InlineKeyboardMarkup()
+        for channel in channels:
+            kb.add(
+                types.InlineKeyboardButton(text="Подписаться", url=channel.link)
+            )
+        return bot.send_message(message.chat.id, "Подпишитесь на все каналы ниже, затем повторите действие.",
+                                reply_markup=kb)
     if message.text == "🚀 Задать вопрос":
         bot.send_message(message.chat.id, "Пожалуйста, напишите свой запрос одним сообщением 📍", reply_markup=menuGpt)
         bot.register_next_step_handler(message, talkGpt)
@@ -190,15 +237,15 @@ def dialogue(message: types.Message):
         bot.register_next_step_handler(message, openFaq)
     elif message.text == "🎯 Администрация":
         bot.send_message(message.chat.id, "По важным вопросам", reply_markup=showAdmin)
-    elif message.text == "Рассылка" and message.chat.id in admins:
+    elif message.text == "Рассылка" and (userInfo.status or message.chat.id in admins):
         kb = types.ReplyKeyboardMarkup(True)
         kb.add("Пользователи", "Чаты").add("Отмена")
         bot.send_message(message.chat.id, "Кому отправить сообщение", reply_markup=kb)
         bot.register_next_step_handler(message, selectSendAll)
-    elif message.text == "Пользователи" and message.chat.id in admins:
+    elif message.text == "Пользователи" and (userInfo.status or message.chat.id in admins):
         bot.send_message(message.chat.id, "Введите ID или username пользователя.", reply_markup=cancel)
         bot.register_next_step_handler(message, searchUser)
-    elif message.text == "Статистика" and message.chat.id in admins:
+    elif message.text == "Статистика" and (userInfo.status or message.chat.id in admins):
         countChatsUsers = 0
         for chat in Chats.select():
             try:
@@ -215,10 +262,10 @@ def dialogue(message: types.Message):
 
 Всего пользователей: {len(Users.select()) + countChatsUsers}"""
         bot.send_message(message.chat.id, text)
-    elif message.text == "Изменить сообщение старт" and message.chat.id in admins:
+    elif message.text == "Изменить сообщение старт" and (userInfo.status or message.chat.id in admins):
         bot.send_message(message.chat.id, "Введите новое сообщение для старта (можно с фото)", reply_markup=cancel)
         bot.register_next_step_handler(message, changeStart)
-    elif message.text == "Реклама" and message.chat.id in admins:
+    elif message.text == "Реклама" and (userInfo.status or message.chat.id in admins):
         ads = Ads.select()
         kb = types.ReplyKeyboardMarkup(True)
         text = "Все рекламы на данный момент:\n"
@@ -229,15 +276,80 @@ def dialogue(message: types.Message):
         kb.add("Добавить рекламу").add("Отмена")
         bot.send_message(message.chat.id, text, reply_markup=kb)
         bot.register_next_step_handler(message, viewAds)
+    elif message.text == "Каналы" and (userInfo.status or message.chat.id in admins):
+        channels = Channels.select()
+        kb = types.ReplyKeyboardMarkup(True)
+        for channel in channels:
+            name = bot.get_chat(channel.channel_id).first_name
+            kb.add(f"{channel.channel_id} | | {name}")
+        kb.add("Добавить канал").add("Отмена")
+        bot.send_message(message.chat.id, "Для удаления канала нажмите на него.", reply_markup=kb)
+        bot.register_next_step_handler(message, viewChannels)
+    elif message.text == "Менеджеры" and message.chat.id in admins:
+        bot.send_message(message.chat.id, "Введите ID пользователя кого сделать менеджером/убрать.", reply_markup=cancel)
+        bot.register_next_step_handler(message, addManager)
     else:
         bot.send_message(message.chat.id, "Я тебя не понимаю. Выбери функцию из меню ниже.", reply_markup=menuUser)
+
+
+def viewChannels(message):
+    if not message.text or message.text == "Отмена":
+        return admin(message)
+    if message.text == "Добавить канал":
+        bot.send_message(message.chat.id, "Введите айди канала", reply_markup=cancel)
+        bot.register_next_step_handler(message, addChannel)
+    elif " | | " in message.text:
+        channel_id = message.text.split(" | | ", 1)[0]
+        try:
+            channel_id = int(channel_id)
+        except:
+            return admin(message)
+        channel = Channels.select().where(Channels.channel_id == channel_id)
+        if channel:
+            channel[0].delete_instance()
+        bot.send_message(message.chat.id, "Канал успешно удалён.")
+    else:
+        admin(message)
+
+
+def addChannel(message):
+    if not message.text or message.text == "Отмена":
+        return admin(message)
+    try:
+        channel_id = int(message.text)
+    except:
+        return admin(message)
+    if Channels.select().where(Channels.channel_id == channel_id).exists():
+        return bot.send_message(message.chat.id, "Такой канал уже добавлен.", reply_markup=menuAdmin(message.chat.id))
+    bot.send_message(message.chat.id, "Введите ссылку на канал", reply_markup=cancel)
+    bot.register_next_step_handler(message, addChannelFinish, channel_id)
+
+
+def addChannelFinish(message, channel_id):
+    if not message.text or message.text == "Отмена":
+        return admin(message)
+    Channels.create(channel_id=channel_id, link=link)
+    bot.send_message(message.chat.id, "Канал успешно добавлен.", reply_markup=menuAdmin(message.chat.id))
+
+
+def addManager(message: types.Message): # Добавить менеджера
+    if not message.text or not message.text.isdigit():
+        return admin(message)
+    if not Users.select().where(Users.user_id == int(message.text)).exists():
+        return bot.send_message(message.chat.id, "Не могу найти такого пользователя.", reply_markup=menuAdmin(message.chat.id))
+    userInfo = Users.select().where(Users.user_id == int(message.text))[0]
+    if userInfo.status == "manager":
+        Users.update(status="").where(Users.user_id == int(message.text)).execute()
+        return bot.send_message(message.chat.id, "Пользователь успешно снят с должности менеджера.", reply_markup=menuAdmin(message.chat.id))
+    Users.update(status="manager").where(Users.user_id == int(message.text)).execute()
+    bot.send_message(message.chat.id, "Пользователь успешно добавлен в менеджеры.", reply_markup=menuAdmin(message.chat.id))
 
 
 def viewAds(message: types.Message):
     if not message.text or message.text == "Отмена":
         return admin(message)
     if Ads.select().where(Ads.name == message.text):
-        Ads.select().where(Ads.name == message.text)[0].delete_instance()
+        Ads.select().where(Ads.name == message.text).delete_instance()
         bot.send_message(message.chat.id, "Реклама успешно удалена.", reply_markup=menuAdmin)
     elif message.text == "Добавить рекламу":
         bot.send_message(message.chat.id, "Введите название рекламы (для понимания в админке)", reply_markup=cancel)
