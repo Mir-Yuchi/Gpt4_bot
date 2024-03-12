@@ -103,11 +103,10 @@ def generate_chat(message):
 
 
 def menuAdmin(user_id):
-    userInfo = Users.select().where(Users.user == user_id)[0]
     menuAdmin = types.ReplyKeyboardMarkup(True)
     menuAdmin.add("Рассылка").add("Пользователи").add("Статистика").add("Изменить сообщение старт").add("Реклама").add("Каналы")
-    if userInfo.status == "owner":
-        menuAdmin.add("Добавить менеджера").add("Передать права")
+    if user_id in admins:
+        menuAdmin.add("Менеджеры").add("Передать права")
     return menuAdmin
 
 
